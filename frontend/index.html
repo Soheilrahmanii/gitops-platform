@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitOps Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>GitOps Platform</h1>
+      <p class="subtitle">Fill out the form to provision your environment.</p>
+    </header>
+
+    <form id="provision-form">
+      <div class="field">
+        <label for="team_name">Team name</label>
+        <input type="text" id="team_name" name="team_name"
+               placeholder="e.g. platform" required pattern="[a-z][a-z0-9-]{1,38}[a-z0-9]">
+        <span class="hint">Lowercase, hyphens allowed, 3–40 chars.</span>
+      </div>
+
+      <div class="field">
+        <label for="app_name">App name</label>
+        <input type="text" id="app_name" name="app_name"
+               placeholder="e.g. hello-world" required pattern="[a-z][a-z0-9-]{1,38}[a-z0-9]">
+        <span class="hint">Lowercase, hyphens allowed, 3–40 chars.</span>
+      </div>
+
+      <div class="field">
+        <label for="description">Description <span class="optional">(optional)</span></label>
+        <input type="text" id="description" name="description"
+               placeholder="What does this service do?" maxlength="256">
+      </div>
+
+      <button type="submit" id="submit-btn">Provision</button>
+    </form>
+
+    <section id="result" hidden>
+      <h2>Environment provisioned</h2>
+      <ul id="result-list"></ul>
+    </section>
+
+    <section id="error" hidden>
+      <h2>Something went wrong</h2>
+      <p id="error-message"></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

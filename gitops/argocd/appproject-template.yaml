@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ project_name }}
+  namespace: argocd
+  labels:
+    managed-by: gitops-platform
+    team: {{ team_name }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "GitOps Platform project for team {{ team_name }}"
+
+  # Only repos from the org can be synced into this project.
+  sourceRepos:
+    - {{ github_org_url }}/*
+
+  # Restrict where ArgoCD can deploy — only the team's own namespace.
+  destinations:
+    - namespace: {{ namespace }}
+      server: https://kubernetes.default.svc
+
+  # No cluster-scoped resources allowed.
+  clusterResourceWhitelist: []
+
+  # Only allow standard workload resource types.
+  namespaceResourceWhitelist:
+    - group: "apps"
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler

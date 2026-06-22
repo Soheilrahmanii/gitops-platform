@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in your values.
+# The backend writes this file automatically — this is for manual runs.
+
+team_name = "platform"
+app_name  = "hello-world"
+
+# Optional: override the kubeconfig if not using the default.
+# kubeconfig_path    = "~/.kube/config"
+# kubeconfig_context = "kind-idp-demo"

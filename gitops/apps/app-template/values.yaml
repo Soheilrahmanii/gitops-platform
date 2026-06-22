@@ -1,0 +1,59 @@
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: alpine
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  # targetPort defaults to 80; override if your container listens elsewhere.
+  targetPort: 80
+
+# ServiceAccount is created and bound by Terraform, not by this chart.
+# Set name to the resource_name provisioned by GitOps Platform (e.g. "platform-hello-world").
+# Leave blank to fall back to the Helm release name.
+serviceAccount:
+  create: false
+  name: ""
+
+# Environment variables injected into every container.
+env: []
+# - name: LOG_LEVEL
+#   value: info
+
+# Liveness probe — restarts the container if it stops responding.
+livenessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  failureThreshold: 3
+
+# Readiness probe — gates traffic until the container is ready.
+readinessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 3
+
+# Must stay within the ResourceQuota set by the namespace Terraform module:
+#   requests.cpu=500m, requests.memory=512Mi, limits.cpu=1, limits.memory=1Gi
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# Horizontal autoscaling — disabled by default in a demo cluster.
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80

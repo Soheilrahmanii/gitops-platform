@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ app_name }}
+  namespace: argocd
+  labels:
+    managed-by: gitops-platform
+    team: {{ team_name }}
+  finalizers:
+    # Cascade-delete all K8s resources when this Application is removed.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ project_name }}
+  source:
+    repoURL: {{ repo_url }}
+    targetRevision: {{ target_revision }}
+    path: .
+    helm:
+      releaseName: {{ app_name }}
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ namespace }}
+  revisionHistoryLimit: 3
+  syncPolicy:
+    automated:
+      prune: true      # remove K8s resources deleted from git
+      selfHeal: true   # revert manual cluster changes back to git state
+    syncOptions:
+      - CreateNamespace=false   # namespace is owned by Terraform
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  # Ignore resource limits on containers — the LimitRange injected by Terraform
+  # sets defaults that would otherwise cause ArgoCD to see constant drift.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/spec/containers/0/resources/limits
+        - /spec/template/spec/containers/0/resources/requests

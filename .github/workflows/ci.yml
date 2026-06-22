@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Python unit tests ───────────────────────────────────────────────────────
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run tests
+        run: python -m pytest backend/tests/ -v --tb=short
+        env:
+          # Dummy values — services are fully mocked in tests.
+          GITHUB_TOKEN: test-token
+          GITHUB_ORG: test-org
+          GITHUB_TEMPLATE_REPO: test-org/app-template
+          GRAFANA_URL: http://localhost:3001
+          GRAFANA_USER: admin
+          GRAFANA_PASSWORD: admin
+
+  # ── Helm lint ───────────────────────────────────────────────────────────────
+  helm:
+    name: helm lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: "3.14.4"
+
+      - name: Lint app-template chart
+        run: helm lint gitops/apps/app-template/ --strict
+
+      - name: Template render (smoke test)
+        run: |
+          helm template smoke-test gitops/apps/app-template/ \
+            --namespace platform-hello-world \
+            --set image.tag=v1.0.0 > /dev/null
+
+  # ── Terraform validate ──────────────────────────────────────────────────────
+  terraform:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Validate namespace module
+        run: |
+          terraform -chdir=terraform/modules/namespace init -backend=false -input=false
+          terraform -chdir=terraform/modules/namespace validate
+
+      - name: Validate rbac module
+        run: |
+          terraform -chdir=terraform/modules/rbac init -backend=false -input=false
+          terraform -chdir=terraform/modules/rbac validate
+
+      - name: Validate root module
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: app-template
+description: >
+  Minimal application Helm chart provisioned by the IDP.
+  Deploy any container image; resource limits, RBAC, and namespace
+  are pre-configured by the platform.
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - idp
+  - platform
+home: https://github.com/YOUR_ORG/gitops-platform

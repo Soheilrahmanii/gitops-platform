@@ -1,0 +1,176 @@
+================================================================================
+GITOPS PLATFORM — TEST RUNBOOK
+================================================================================
+
+TIER 1 — Unit tests (no cluster, no credentials required)
+--------------------------------------------------------------------------------
+
+1. Install Python dependencies
+
+   cd /path/to/gitops-platform/backend
+   pip install -r requirements.txt
+
+2. Run the 128 unit tests
+
+   python3 -m pytest tests/ -v
+
+   Expected output: 128 passed in ~35 seconds.
+   All services are mocked — no network calls, no cluster needed.
+
+3. Validate the Helm chart
+
+   cd /path/to/gitops-platform
+   bash scripts/helm-test.sh
+
+   Expected output:
+     1 chart(s) linted, 0 chart(s) failed
+     kind: Deployment
+     kind: Service
+     All Helm checks passed.
+
+4. Validate Terraform syntax and run native tests
+
+   bash scripts/tf-test.sh
+
+   Requires: terraform >= 1.7 on PATH.
+   Expected output: all 3 modules validate + all .tftest.hcl assertions pass.
+   Uses mock_provider "kubernetes" — no real cluster needed.
+
+--------------------------------------------------------------------------------
+All Tier 1 checks should pass on any machine with Python 3.11+ and no setup.
+--------------------------------------------------------------------------------
+
+
+TIER 2 — End-to-end demo (needs Docker, kind, GitHub token)
+--------------------------------------------------------------------------------
+
+PREREQUISITES
+  - Docker running
+  - kind      >= 0.22   (brew install kind)
+  - kubectl   >= 1.28   (brew install kubectl)
+  - terraform >= 1.7    (brew install terraform)
+  - helm      >= 3.14   (brew install helm)
+  - A GitHub personal access token with the "repo" and "delete_repo" scopes
+
+STEP 1 — Configure
+
+   cd /path/to/gitops-platform
+   cp .env.example .env
+
+   Open .env and set:
+     GITHUB_TOKEN=ghp_your_real_token
+     GITHUB_ORG=your-github-username-or-org
+     GITHUB_TEMPLATE_REPO=your-org/app-template
+
+   Note: GITHUB_TEMPLATE_REPO must already exist on GitHub.
+   Push the contents of gitops/apps/app-template/ to a new public repo
+   named "app-template" in your org before running the demo.
+
+STEP 2 — Bootstrap the cluster (takes ~3 minutes)
+
+   chmod +x scripts/*.sh
+   ./scripts/setup-kind.sh
+
+   This also starts a Grafana port-forward on :3001 in the background.
+   Save the printed ArgoCD admin password for Step 7.
+
+STEP 3 — Start port-forward for ArgoCD
+
+   kubectl port-forward svc/argocd-server -n argocd 8443:443 &
+
+STEP 4 — Start the services
+
+   docker compose up --build
+
+   Wait for: INFO: Application startup complete.
+
+STEP 5 — Provision an environment
+
+   Open http://localhost:8081 in your browser.
+
+   Fill in:
+     Team name : platform
+     App name  : hello-world
+
+   Click Provision.
+   Wait 30-60 seconds for the checklist to appear.
+
+STEP 6 — Verify GitHub
+
+   Open the GitHub URL shown in the result. Check:
+     - Repo created from your template
+     - Branch protection on main (Settings -> Branches)
+     - CODEOWNERS file in the repo root
+     - Topics: platform, hello-world, idp
+
+STEP 7 — Verify Kubernetes
+
+   kubectl get namespace platform-hello-world
+   kubectl describe resourcequota default-quota -n platform-hello-world
+   kubectl get role,rolebinding,serviceaccount -n platform-hello-world
+
+STEP 8 — Verify ArgoCD
+
+   Open https://localhost:8443
+   Login: admin / (password from Step 2)
+   You should see Application "platform-hello-world" syncing.
+
+STEP 9 — Verify Grafana
+
+   Open http://localhost:3001
+   Login: admin / admin
+   Go to Dashboards and search for "platform-hello-world".
+   You should see 3 panels: Running Pods, CPU Usage, Memory Usage.
+
+   Note: Grafana runs on :3001 (not 3000) to avoid conflicts with other
+   services. Port-forward is started automatically by setup-kind.sh.
+
+STEP 10 — Teardown a single environment via API
+
+   curl -X DELETE http://localhost:8000/provision/platform/hello-world
+   Expected: HTTP 204 No Content
+
+   This deletes in order:
+     1. ArgoCD Application + AppProject
+     2. Terraform destroys namespace + RBAC
+     3. GitHub repo deleted
+     4. Grafana dashboard deleted
+
+STEP 11 — Tear down the cluster
+
+   ./scripts/teardown.sh
+
+   Note: deletes the kind cluster and local Terraform state files.
+   GitHub repos must be deleted via the API (Step 9) before this step,
+   or deleted manually from GitHub afterward.
+
+--------------------------------------------------------------------------------
+COMMON ISSUES
+--------------------------------------------------------------------------------
+
+  docker compose fails with kubeconfig error
+    -> Run ./scripts/setup-kind.sh first
+
+  kubectl commands fail
+    -> Run: export KUBECONFIG=~/.kube/config
+    -> Verify: kubectl get nodes
+
+  Grafana 401 Unauthorized
+    -> Port 3001 may not be forwarded. Run:
+       kubectl port-forward svc/monitoring-grafana -n monitoring 3001:80 &
+    -> If another service is on :3001, change GRAFANA_URL in .env and
+       update the port-forward command accordingly.
+
+  ArgoCD Application stays OutOfSync
+    -> The template repo must be public, or add a deploy key to it
+
+  Grafana shows no data in panels
+    -> Wait ~2 minutes for Prometheus to begin scraping the new namespace
+
+  GitHub 401 Unauthorized
+    -> Token must have the "repo" scope and must not be expired
+
+  Port 8081 already in use
+    -> Change the frontend port in docker-compose.yml and backend/main.py
+
+================================================================================

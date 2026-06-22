@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: ./backend
+    network_mode: host
+    env_file: .env
+    volumes:
+      # Mount kubeconfig so the backend can reach the kind cluster from the host.
+      - "${KUBECONFIG:-$HOME/.kube/config}:/root/.kube/config:ro"
+      # Mount Terraform source directory so TerraformService can run terraform apply.
+      - "./terraform:/app/terraform"
+      - "./gitops:/app/gitops"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      backend:
+        condition: service_healthy
