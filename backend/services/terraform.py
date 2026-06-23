@@ -5,6 +5,10 @@ Why subprocess instead of the Terraform CDK or python-hcl2?
 - No extra runtime dependencies.
 - The same shell commands work in CI and locally.
 - Terraform state stays in files, making it inspectable after a failed demo.
+
+State isolation: each team/app slug gets its own state file at
+terraform/state/{team}-{app}.tfstate so concurrent provisions don't clobber
+each other and destroy always targets the right resources.
 """
 import os
 import subprocess
@@ -18,6 +22,11 @@ _TERRAFORM_DIR = Path(__file__).parent.parent / "terraform"
 class TerraformService:
     def __init__(self, terraform_dir: Path = _TERRAFORM_DIR) -> None:
         self._dir = terraform_dir
+
+    def _state_path(self, team_name: str, app_name: str) -> Path:
+        state_dir = self._dir / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        return state_dir / f"{team_name}-{app_name}.tfstate"
 
     def apply(self, team_name: str, app_name: str) -> None:
         """Writes a tfvars file and runs terraform apply."""
@@ -33,12 +42,15 @@ class TerraformService:
             f.write(tfvars_content)
             tfvars_path = f.name
 
+        state_path = self._state_path(team_name, app_name)
+
         try:
             self._run(["terraform", "init", "-input=false"])
             self._run([
                 "terraform", "apply",
                 "-auto-approve",
                 "-input=false",
+                f"-state={state_path}",
                 f"-var-file={tfvars_path}",
                 "-var=kubeconfig_path=/root/.kube/config",
             ])
@@ -58,12 +70,15 @@ class TerraformService:
             f.write(tfvars_content)
             tfvars_path = f.name
 
+        state_path = self._state_path(team_name, app_name)
+
         try:
             self._run(["terraform", "init", "-input=false"])
             self._run([
                 "terraform", "destroy",
                 "-auto-approve",
                 "-input=false",
+                f"-state={state_path}",
                 f"-var-file={tfvars_path}",
                 "-var=kubeconfig_path=/root/.kube/config",
             ])

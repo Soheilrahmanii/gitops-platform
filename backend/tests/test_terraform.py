@@ -135,6 +135,56 @@ def test_apply_uses_injected_terraform_dir(tmp_path):
         assert c.kwargs["cwd"] == tmp_path
 
 
+# ── state isolation ────────────────────────────────────────────────────────────
+
+def test_apply_passes_per_slug_state_flag(tmp_path):
+    with patch("subprocess.run", return_value=_ok()) as mock_run:
+        TerraformService(terraform_dir=tmp_path).apply("team-a", "app-1")
+
+    apply_call = mock_run.call_args_list[1]
+    state_args = [a for a in apply_call.args[0] if a.startswith("-state=")]
+    assert len(state_args) == 1
+    assert state_args[0].endswith("team-a-app-1.tfstate")
+
+
+def test_destroy_passes_per_slug_state_flag(tmp_path):
+    with patch("subprocess.run", return_value=_ok()) as mock_run:
+        TerraformService(terraform_dir=tmp_path).destroy("team-a", "app-1")
+
+    destroy_call = mock_run.call_args_list[1]
+    state_args = [a for a in destroy_call.args[0] if a.startswith("-state=")]
+    assert len(state_args) == 1
+    assert state_args[0].endswith("team-a-app-1.tfstate")
+
+
+def test_two_provisions_use_different_state_files(tmp_path):
+    state_files = []
+
+    def fake_run(cmd, **kwargs):
+        for arg in cmd:
+            if arg.startswith("-state="):
+                state_files.append(arg.split("=", 1)[1])
+        return _ok()
+
+    with patch("subprocess.run", side_effect=fake_run):
+        TerraformService(terraform_dir=tmp_path).apply("team-a", "app-1")
+        TerraformService(terraform_dir=tmp_path).apply("team-b", "app-2")
+
+    apply_states = [p for p in state_files if p.endswith(".tfstate")]
+    assert len(apply_states) == 2
+    assert apply_states[0] != apply_states[1]
+
+
+def test_state_file_is_inside_terraform_dir(tmp_path):
+    with patch("subprocess.run", return_value=_ok()) as mock_run:
+        TerraformService(terraform_dir=tmp_path).apply("platform", "hello-world")
+
+    apply_call = mock_run.call_args_list[1]
+    state_arg = next(a for a in apply_call.args[0] if a.startswith("-state="))
+    state_path = Path(state_arg.split("=", 1)[1])
+    assert state_path.is_relative_to(tmp_path)
+
+
 # ── destroy ────────────────────────────────────────────────────────────────────
 
 def test_destroy_runs_init_then_destroy():
